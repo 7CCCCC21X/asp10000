@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>$ASP BuildKey / 早鸟资格 批量查询</title>
+  <title>$ASP BuildKey / 资格批量查询</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="min-h-screen bg-gray-100 flex flex-col items-center py-8 px-4">
-  <h1 class="text-2xl font-bold mb-6">$ASP BuildKey / 早鸟资格 批量查询</h1>
+  <h1 class="text-2xl font-bold mb-6">$ASP BuildKey 资格批量查询</h1>
 
   <!-- 输入区 -->
   <div class="w-full max-w-3xl bg-white shadow rounded-lg p-6 mb-8">
@@ -36,39 +36,20 @@
 
 <script>
 // -------- 全局数据 --------
-const db = new Map();      // address => category: 'both' | 'buildKey'
+const whiteSet = new Set();   // 合资格地址集合
 let dataReady = false;
-
-// -------- 帮助函数 --------
-function parseLine(line){
-  if(!line.trim()) return null;
-  // 数据列用制表符或逗号分隔。前两列可能是序号/地址；后面是奖励描述
-  const parts = line.split(/\t|,/).map(p=>p.trim());
-  // 如果第一列是序号，地址在第二列；否则地址在第一列
-  let addr = parts[0];
-  if(/^(\d+)$/.test(addr) && parts[1]) addr = parts[1];
-  if(!/^([1-9A-HJ-NP-Za-km-z]{32,44})$/.test(addr)) return null; // 粗略检测 Sol 地址
-
-  const rewardTxt = parts.slice(2).join(' ').toLowerCase();
-  const isEarly   = rewardTxt.includes('early access');   // TGE Early Access Eligibility
-  const isBuild   = rewardTxt.includes('buildkey');       // BuildKey mention
-
-  if(!isEarly && !isBuild) return null;
-
-  return {addr, category: isEarly ? 'both' : 'buildKey'};
-}
 
 // -------- 载入 data.txt --------
 fetch('data.txt')
   .then(r => r.text())
   .then(txt => {
     txt.split(/\r?\n/).forEach(line=>{
-      const rec = parseLine(line);
-      if(rec) db.set(rec.addr, rec.category);
+      const addr = line.trim();
+      if(addr) whiteSet.add(addr);
     });
     dataReady = true;
     document.getElementById('statusMsg').textContent =
-      `数据加载完成，共 ${db.size} 条记录。`;
+      `数据加载完成，共 ${whiteSet.size} 条记录。`;
   })
   .catch(err=>{
     console.error(err);
@@ -78,19 +59,16 @@ fetch('data.txt')
 
 // -------- 查询逻辑 --------
 document.getElementById('searchBtn').addEventListener('click', ()=>{
-  if(!dataReady){ alert('数据尚未加载完成，请稍候再试'); return;}
+  if(!dataReady){ alert('数据尚未加载完成，请稍后再试'); return;}
 
   const raw = document.getElementById('addrInput').value.trim();
   if(!raw){ alert('请输入至少一个地址'); return; }
 
   const list = raw.split(/\r?\n/).map(a=>a.trim()).filter(Boolean);
-  const both=[], buildOnly=[], miss=[];
+  const ok = [], miss = [];
 
   list.forEach(a=>{
-    const cat = db.get(a);
-    if(cat==='both')      both.push(a);
-    else if(cat==='buildKey') buildOnly.push(a);
-    else                miss.push(a);
+    (whiteSet.has(a) ? ok : miss).push(a);
   });
 
   // ---- 概览 ----
@@ -101,12 +79,12 @@ document.getElementById('searchBtn').addEventListener('click', ()=>{
       <p class="text-xl font-semibold">${list.length}</p>
     </div>
     <div class="bg-white shadow p-4 rounded">
-      <p class="text-sm text-gray-500">早鸟 + BuildKey</p>
-      <p class="text-xl font-semibold text-green-600">${both.length}</p>
+      <p class="text-sm text-gray-500">符合资格</p>
+      <p class="text-xl font-semibold text-green-600">${ok.length}</p>
     </div>
     <div class="bg-white shadow p-4 rounded">
-      <p class="text-sm text-gray-500">仅 BuildKey</p>
-      <p class="text-xl font-semibold text-indigo-600">${buildOnly.length}</p>
+      <p class="text-sm text-gray-500">未找到</p>
+      <p class="text-xl font-semibold text-red-600">${miss.length}</p>
     </div>
   </div>`;
 
@@ -124,9 +102,8 @@ document.getElementById('searchBtn').addEventListener('click', ()=>{
       </div>
     </div>` : '';
 
-  results.insertAdjacentHTML('beforeend', makeTable('早鸟 + BuildKey 资格', both, 'green'));
-  results.insertAdjacentHTML('beforeend', makeTable('仅 BuildKey 资格', buildOnly, 'indigo'));
-  results.insertAdjacentHTML('beforeend', makeTable('未找到（请确认地址）', miss, 'red'));
+  results.insertAdjacentHTML('beforeend', makeTable('符合资格地址', ok, 'green'));
+  results.insertAdjacentHTML('beforeend', makeTable('未找到地址', miss, 'red'));
 });
 </script>
 </body>
